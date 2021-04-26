@@ -16,6 +16,7 @@ namespace {
 std::unordered_set<Symbol> supported_ops = {
     prim::If,
     prim::Loop,
+    prim::Uninitialized,
     prim::TupleUnpack,
     prim::TupleConstruct,
     prim::TupleIndex,
