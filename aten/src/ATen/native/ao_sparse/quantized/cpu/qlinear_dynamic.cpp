@@ -32,17 +32,16 @@ at::Tensor PackedLinearWeightQnnp::apply_dynamic_impl<false>(
       input.dim() >= 2,
       "quantized_sparse_linear(): Input tensor rank should be >= 2");
 
-  size_t rows_input = 1;
-  size_t cols_input = input.size(input.dim() - 1);
-  for (size_t i = 0; i < input.dim() - 1; ++i) {
-    rows_input *= input.size(i);
-  }
+  const auto rows_input = c10::multiply_integers(input.sizes().begin(), input.sizes().end() - 1);
+  const auto cols_input = static_cast<int64_t>(input.size(input.dim() - 1));
   TORCH_CHECK(
       cols_input == orig_weight_.size(1),
       "quantized_sparse_lienar: Input tensor's last and weight tensor's"
       " second dimension must match.");
 
+  // NOLINTNEXTLINE(cppcoreguidelines-init-variables)
   float x_min;
+  // NOLINTNEXTLINE(cppcoreguidelines-init-variables)
   float x_max;
   if (input.numel() > 0) {
     x_min = input.min().item<float>();
@@ -69,6 +68,7 @@ at::Tensor PackedLinearWeightQnnp::apply_dynamic_impl<false>(
     // We calculate requant scale here as the vector holding the requant scale
     // is owned by this module. The pointer is then passed to qnnpack backend.
     generate_requantization_scales(
+        // NOLINTNEXTLINE(bugprone-narrowing-conversions,cppcoreguidelines-narrowing-conversions)
         w_scales_, q_input_contig.q_scale(), 1.f, requantization_scales_);
     input_scale_ = q_input_contig.q_scale();
     pytorch_qnnp_operator_t sparse_linear_op{nullptr};
@@ -104,6 +104,7 @@ at::Tensor PackedLinearWeightQnnp::apply_dynamic_impl<false>(
   // scales.
   if (input_scale_ != q_input_contig.q_scale()) {
     generate_requantization_scales(
+        // NOLINTNEXTLINE(bugprone-narrowing-conversions,cppcoreguidelines-narrowing-conversions)
         w_scales_, q_input_contig.q_scale(), 1.f, requantization_scales_);
   }
   // Update input related quantization params in the operator.

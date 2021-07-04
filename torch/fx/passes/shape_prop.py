@@ -1,7 +1,6 @@
 import torch
 import torch.fx
 from torch.fx.node import Node, map_aggregate
-from torch.fx.operator_schemas import create_type_hint
 from typing import Any, Tuple, NamedTuple, Optional
 
 class TensorMetadata(NamedTuple):
@@ -11,6 +10,7 @@ class TensorMetadata(NamedTuple):
     # General Tensor metadata
     shape : torch.Size
     dtype : torch.dtype
+    requires_grad : bool
     stride : Tuple[int]
     memory_format : Optional[torch.memory_format]
 
@@ -26,6 +26,7 @@ def extract_tensor_metadata(result : torch.Tensor) -> TensorMetadata:
     """
     shape = result.shape
     dtype = result.dtype
+    requires_grad = result.requires_grad
     stride = result.stride()
 
     memory_formats = {
@@ -55,7 +56,8 @@ def extract_tensor_metadata(result : torch.Tensor) -> TensorMetadata:
 
 
     return TensorMetadata(
-        shape, dtype, stride, memory_format, is_quantized, qscheme, q_scale, q_zero_point)
+        shape, dtype, requires_grad, stride, memory_format, is_quantized, qscheme, q_scale, q_zero_point)
+
 
 class ShapeProp(torch.fx.Interpreter):
     """
@@ -118,7 +120,7 @@ class ShapeProp(torch.fx.Interpreter):
         if found_tensor:
             n.meta['tensor_meta'] = meta
 
-        n.meta['type'] = create_type_hint(result)
+        n.meta['type'] = type(result)
         return result
 
     def propagate(self, *args):

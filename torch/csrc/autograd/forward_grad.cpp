@@ -17,7 +17,7 @@ namespace {
 
     // Temporary flag to disable forward mode
     // TODO(alband) remove these when perf issues are solved
-    // NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)
+    // NOLINTNEXTLINE(clang-diagnostic-unused-variable,cppcoreguidelines-avoid-non-const-global-variables)
     static bool is_forward_grad_enabled = false;
 }
 
@@ -75,16 +75,6 @@ const at::Tensor& ForwardGrad::value(uint64_t level) const {
 
 const at::Tensor& ForwardGrad::undef_grad() {
     return singleton_undefined_tensor;
-}
-
-// Temporary functions to disable forward AD
-// TODO(alband) remove these when perf issues are solved
-bool isForwardADEnabled() {
-    return is_forward_grad_enabled;
-}
-
-void setForwardADEnabled(bool value) {
-    is_forward_grad_enabled = value;
 }
 
 }} // namespace torch::autograd

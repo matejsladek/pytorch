@@ -22,6 +22,7 @@ namespace tensorexpr {
 // A class that analyzes the given program relevant for Cuda backends.
 class CudaAnalysis : public IRVisitor {
  public:
+  // NOLINTNEXTLINE(modernize-use-equals-default,cppcoreguidelines-pro-type-member-init)
   CudaAnalysis() {
     gpu_block_extents_ = {new IntImm(1), new IntImm(1), new IntImm(1)};
     gpu_thread_extents_ = {new IntImm(1), new IntImm(1), new IntImm(1)};
@@ -71,6 +72,7 @@ class CudaAnalysis : public IRVisitor {
 // execution parameters, then if those params differ from the max mask each dim.
 class GPUMetaVarRewriter : public IRMutator {
  public:
+  // NOLINTNEXTLINE(cppcoreguidelines-pro-type-member-init)
   explicit GPUMetaVarRewriter(const CudaAnalysis* cuda_analysis)
       : cuda_analysis_(cuda_analysis) {
     gpu_block_vars_ = {
@@ -107,6 +109,7 @@ class GPUMetaVarRewriter : public IRMutator {
 
  private:
   // When processing a block, stores the contents of each sub-segment.
+  // NOLINTNEXTLINE(cppcoreguidelines-pro-type-member-init)
   class Segment {
    public:
     void reset(bool mask) {
@@ -177,12 +180,16 @@ class CudaPrinter : public IRPrinter {
     return rand_func_;
   }
 
+  std::string dtypeToCppString(const Dtype& dtype) override;
+
   using IRPrinter::name_manager;
   using IRPrinter::visit;
 
  private:
   const Var* rand_func_;
   const CudaAnalysis* cuda_analysis_;
+
+  void print_flat_alloc(const Allocate* alloc);
 };
 
 // Construct Cuda C from the buffer and tensor input, and invoke the kernel
@@ -190,6 +197,7 @@ class CudaPrinter : public IRPrinter {
 class TORCH_CUDA_CU_API CudaCodeGen : public CodeGen {
  public:
   template <typename... Ts>
+  // NOLINTNEXTLINE(cppcoreguidelines-pro-type-member-init)
   CudaCodeGen(Stmt* stmt, Ts... ts)
       : CodeGen(
             stmt,
@@ -198,6 +206,7 @@ class TORCH_CUDA_CU_API CudaCodeGen : public CodeGen {
     Initialize();
   }
 
+  // NOLINTNEXTLINE(cppcoreguidelines-pro-type-member-init)
   CudaCodeGen(
       Stmt* stmt,
       const std::vector<BufferArg>& buffer_args,
@@ -209,6 +218,7 @@ class TORCH_CUDA_CU_API CudaCodeGen : public CodeGen {
 
   ~CudaCodeGen() override;
 
+  void call_raw(const std::vector<void*>& args) override;
   void call(const std::vector<CallArg>& args) override;
 
   template <typename... Ts>

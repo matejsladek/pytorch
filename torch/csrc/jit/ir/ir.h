@@ -149,6 +149,8 @@ using topo_position_t = int64_t;
 using ValueSet = std::unordered_set<const Value*>;
 
 struct OperatorSet;
+template <typename T>
+struct OperatorMap;
 
 // This is a wrapper to allow invalidating the Python object
 // safely when the C++ object for a Node/Value/Block is deleted
@@ -264,7 +266,25 @@ struct Value {
   //          %4 = g(%3)
   //          %5 = inplace_(%3)
   //          %6 = h(%5, %5)
+  // XXX: does not check scoping legality, consider using
+  // replaceAllUsesDominatedByNodeWith
   TORCH_API void replaceAllUsesAfterNodeWith(const Node* node, Value* newValue);
+
+  // Replaces all uses of this value with 'newValue' that are dominated by
+  // 'node'. Given:
+  // x = op(...).
+  // if cond:
+  //    z = foo(..)
+  //    bar(x)
+  // else:
+  //    print(x)
+  // x.replaceAllUsesDominatedByNodeWith(foo, z) would replace bar(x)
+  // but not print(x) because print is not dominated by foo.
+  // replaceAllUsesAfterNode does not check domination, so in this example
+  // it would produce invalid IR.
+  TORCH_API void replaceAllUsesDominatedByNodeWith(
+      const Node* node,
+      Value* newValue);
 
   TORCH_API Value* copyMetadata(Value* from);
 
@@ -441,6 +461,11 @@ struct TORCH_API Node {
   // replaces `this` with a new node with the same inputs and outputs
   // but a new node symbol. does not destroy `this`
   Node* replaceWithNewSymbol(Symbol new_symbol);
+
+  // Checks if this node is dominated by `dominator` which means that
+  // `dominator` will always be executed before `this` and `dominator`
+  // is in scope of `this.
+  bool isDominatedBy(const Node* dominator) const;
 
   // lots of things like chunk have a single input or single output, so we have
   // a helper to make accessing it easier
@@ -716,6 +741,19 @@ struct TORCH_API Node {
       at::ArrayRef<Symbol> const_inputs = {}) const;
 
   bool isMemberOf(const OperatorSet& os) const;
+  template <typename T>
+  bool isMemberOf(const OperatorMap<T>& om) const {
+    auto it = om.map.find(kind());
+    if (it == om.map.end()) {
+      return false;
+    }
+    for (auto& op : it->second) {
+      if (matches(op.first->schema())) {
+        return true;
+      }
+    }
+    return false;
+  }
 
   const FunctionSchema& schema() const;
   const FunctionSchema* maybeSchema() const;
@@ -779,6 +817,7 @@ struct TORCH_API Node {
   }
   // The names are returned in order, since name actually is the index.
   std::vector<Symbol> attributeNames() const {
+    // NOLINTNEXTLINE(cppcoreguidelines-init-variables)
     std::vector<Symbol> names;
     for (const AVPtr& a : values_) {
       names.push_back(a->name);
@@ -786,6 +825,7 @@ struct TORCH_API Node {
     return names;
   }
   std::vector<const char*> attributeNamesS() const {
+    // NOLINTNEXTLINE(cppcoreguidelines-init-variables)
     std::vector<const char*> names;
     for (const AVPtr& a : values_) {
       names.push_back(a->name.toUnqualString());
@@ -854,6 +894,7 @@ struct TORCH_API Node {
     AT_ASSERT(name.is_attr());
     auto it = findAttr(name, false);
     auto nv = AVPtr(new T(name, std::forward<typename T::ConstructorType>(v)));
+    // NOLINTNEXTLINE(bugprone-branch-clone)
     if (it == values_.end()) {
       values_.push_back(std::move(nv));
     } else {
@@ -865,6 +906,7 @@ struct TORCH_API Node {
   typename T::ValueType& getAttr(Symbol name) const {
     AT_ASSERT(name.is_attr());
     auto it = findAttr(name, true);
+    // NOLINTNEXTLINE(cppcoreguidelines-init-variables)
     auto* child = dynamic_cast<T*>(it->get());
     if (child == nullptr) {
       throw IRAttributeError(name, true);
@@ -1037,6 +1079,7 @@ struct Block {
     n->insertAfter(input_);
     return n;
   }
+
   // clone all inputs, nodes, and outputs from src and append them
   // to the inputs, nodes, and outputs of this block
   // value_map is used whenever a node in src references a free variable
@@ -1108,12 +1151,14 @@ struct Graph {
   Node* insert_before_;
 
  public:
+  // NOLINTNEXTLINE(cppcoreguidelines-pro-type-member-init)
   Graph(ScopePtr scope_root)
       : next_unique_(0),
         current_scope_(std::move(scope_root)),
         block_(new Block(this, nullptr)),
         insert_before_(return_node()) {}
 
+  // NOLINTNEXTLINE(modernize-use-equals-default,cppcoreguidelines-pro-type-member-init)
   Graph() : Graph(c10::make_intrusive<Scope>()) {}
 
   at::ArrayRef<Value*> inputs() {
@@ -1366,10 +1411,12 @@ struct WithInsertPoint {
  * the new one, and restores the original scope when the object is destroyed.
  */
 struct WithCurrentScope {
+  // NOLINTNEXTLINE(cppcoreguidelines-pro-type-member-init)
   WithCurrentScope(Graph& g, ScopePtr scope)
       : graph_(&g), prev_scope_(g.current_scope()) {
     g.set_current_scope(std::move(scope));
   }
+  // NOLINTNEXTLINE(modernize-use-equals-default)
   ~WithCurrentScope() {
     graph_->set_current_scope(prev_scope_);
   }
@@ -1379,6 +1426,7 @@ struct WithCurrentScope {
   ScopePtr prev_scope_;
 };
 
+// NOLINTNEXTLINE(cppcoreguidelines-pro-type-member-init)
 inline Value::Value(Node* node_, size_t offset_)
     : node_(node_),
       offset_(offset_),
@@ -1510,6 +1558,105 @@ struct OperatorSet {
  private:
   friend struct Node;
   std::unordered_map<Symbol, std::vector<std::shared_ptr<Operator>>> ops;
+};
+
+template <typename T>
+// NOLINTNEXTLINE(cppcoreguidelines-pro-type-member-init)
+struct OperatorMap {
+  // Type aliasing
+  using OpMapType = typename std::pair<std::shared_ptr<Operator>, T>;
+  using ValueType = std::vector<OpMapType>;
+  using MapType = std::unordered_map<Symbol, ValueType>;
+
+  OperatorMap() = default;
+  // NOLINTNEXTLINE(cppcoreguidelines-pro-type-member-init)
+  explicit OperatorMap(
+      std::initializer_list<std::pair<std::shared_ptr<Operator>, T>> init) {
+    insert(init);
+  }
+  // NOLINTNEXTLINE(cppcoreguidelines-pro-type-member-init)
+  explicit OperatorMap(std::initializer_list<std::pair<const char*, T>> init) {
+    insert(init);
+  }
+
+  void insert(const std::shared_ptr<Operator>& op, T val) {
+    // Remove if exists before insert
+    erase(op);
+    map[Symbol::fromQualString(op->schema().name())].emplace_back(
+        std::make_pair(op, val));
+  }
+
+  void insert(
+      std::initializer_list<std::pair<std::shared_ptr<Operator>, T>> v) {
+    for (auto& el : v) {
+      insert(el.first, el.second);
+    }
+  }
+
+  void insert(std::initializer_list<std::pair<const char*, T>> v) {
+    for (auto& el : v) {
+      insert(getOperatorForLiteral(el.first), el.second);
+    }
+  }
+
+  void erase(const std::shared_ptr<Operator>& op) {
+    auto it = map.find(Symbol::fromQualString(op->schema().name()));
+    if (it == map.end()) {
+      return;
+    }
+    for (auto vit = it->second.begin(); vit != it->second.end(); ++vit) {
+      if (vit->first->schema() == op->schema()) {
+        it->second.erase(vit);
+        break;
+      }
+    }
+    if (it->second.size() == 0) {
+      map.erase(Symbol::fromQualString(op->schema().name()));
+    }
+  }
+
+  bool contains(const Operator& op) const {
+    const auto it = map.find(Symbol::fromQualString(op.schema().name()));
+    if (it == map.end()) {
+      return false;
+    }
+    for (auto vit = it->second.begin(); vit != it->second.end(); ++vit) {
+      if (vit->first->schema() == op.schema()) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  c10::optional<T> find(const Operator& op) {
+    const auto it = map.find(Symbol::fromQualString(op.schema().name()));
+    if (it == map.end()) {
+      return c10::nullopt;
+    }
+    for (auto vit = it->second.begin(); vit != it->second.end(); ++vit) {
+      if (vit->first->schema() == op.schema()) {
+        return vit->second;
+      }
+    }
+    return c10::nullopt;
+  }
+
+  // TODO: return iterator
+  std::vector<OpMapType> getAllKeysAndValues() const {
+    // NOLINTNEXTLINE(cppcoreguidelines-init-variables)
+    std::vector<OpMapType> keys_values;
+    for (auto& symbol_mapping : map) {
+      auto& vec = symbol_mapping.second;
+      for (auto& pair : vec) {
+        keys_values.push_back(pair);
+      }
+    }
+    return keys_values;
+  }
+
+ private:
+  friend struct Node;
+  MapType map;
 };
 
 } // namespace jit

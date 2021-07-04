@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <iostream>
 #include <memory>
+#include <unordered_map>
 namespace torch {
 namespace jit {
 
@@ -18,6 +19,7 @@ struct SourceRange;
 //  - starting_line_no : represents the line in the original file where the
 //                       code segment started.
 struct Source {
+  // NOLINTNEXTLINE(cppcoreguidelines-pro-type-member-init)
   explicit Source(
       std::string text,
       std::shared_ptr<SourceRangeUnpickler> gen_ranges = nullptr)
@@ -28,6 +30,7 @@ struct Source {
     calc_line_start_offsets();
   }
 
+  // NOLINTNEXTLINE(cppcoreguidelines-pro-type-member-init)
   Source(
       std::string text,
       c10::optional<std::string> filename,
@@ -178,6 +181,11 @@ struct TORCH_API SourceRange {
   size_t end_;
 };
 
+struct TORCH_API SourceRangeHasher {
+ public:
+  size_t operator()(const torch::jit::SourceRange& key) const;
+};
+
 struct StackEntry {
   std::string filename;
   SourceRange range;
@@ -201,6 +209,8 @@ struct TaggedRange {
   SourceRange range;
 };
 using SourceRangeRecords = std::vector<TaggedRange>;
+using SourceRangeTagMap =
+    std::unordered_map<SourceRange, int64_t, SourceRangeHasher>;
 
 } // namespace jit
 } // namespace torch

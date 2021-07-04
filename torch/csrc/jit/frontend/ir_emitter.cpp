@@ -2,6 +2,7 @@
 
 #include <c10/util/Exception.h>
 #include <c10/util/StringUtil.h>
+#include <c10/util/irange.h>
 #include <torch/csrc/jit/api/function_impl.h>
 #include <torch/csrc/jit/frontend/canonicalize_modified_loop.h>
 #include <torch/csrc/jit/frontend/convert_to_ssa.h>
@@ -232,11 +233,16 @@ struct Environment {
         b(b),
         next(std::move(next)) {}
 
+  // NOLINTNEXTLINE(cppcoreguidelines-non-private-member-variables-in-classes)
   Function& method;
+  // NOLINTNEXTLINE(cppcoreguidelines-non-private-member-variables-in-classes)
   ResolverPtr resolver;
+  // NOLINTNEXTLINE(cppcoreguidelines-non-private-member-variables-in-classes)
   std::unordered_map<std::string, std::function<std::string()>> error_messages;
+  // NOLINTNEXTLINE(cppcoreguidelines-non-private-member-variables-in-classes)
   Block* b;
 
+  // NOLINTNEXTLINE(cppcoreguidelines-non-private-member-variables-in-classes)
   std::shared_ptr<Environment> next;
 
   // set type error in the lowest environment. if the variable is used after an
@@ -1409,6 +1415,7 @@ struct to_ir {
 
     // if this is an OR, eval second expression if first expr is False
     // If this is an AND, eval second expression if first expr is True
+    // NOLINTNEXTLINE(cppcoreguidelines-init-variables)
     Value* new_result;
     c10::optional<RefinementSet> refinements;
     c10::optional<bool> static_if;
@@ -1474,6 +1481,7 @@ struct to_ir {
     return expr_value;
   }
   Value* emitToBool(const SourceRange& loc, Value* v) {
+    // NOLINTNEXTLINE(cppcoreguidelines-init-variables)
     Value* out;
     try {
       auto bool_cast = environment_stack->getSugaredVar("bool", loc);
@@ -1596,7 +1604,9 @@ struct to_ir {
 
     // Register outputs in each block
     for (const auto& x : mutated_variables) {
+      // NOLINTNEXTLINE(cppcoreguidelines-init-variables)
       Value* tv;
+      // NOLINTNEXTLINE(cppcoreguidelines-init-variables)
       Value* fv;
 
       {
@@ -1791,6 +1801,7 @@ struct to_ir {
     {
       Block* condition_block = n->addBlock();
       pushFrame(condition_block);
+      // NOLINTNEXTLINE(cppcoreguidelines-init-variables)
       Value* out;
       if (cond) {
         WithInsertPoint insert(condition_block);
@@ -2078,6 +2089,7 @@ struct to_ir {
       case '^':
         return use_inplace_op ? aten::bitwise_xor : aten::__xor__;
       case TK_LSHIFT:
+        // NOLINTNEXTLINE(bugprone-branch-clone)
         return use_inplace_op ? aten::__lshift__ : aten::__lshift__;
       case TK_RSHIFT:
         return use_inplace_op ? aten::__irshift__ : aten::__rshift__;
@@ -2252,6 +2264,7 @@ struct to_ir {
       // If it's a tensor, just fully evaluate the subscript operation and emit
       // an in-place assignment
       std::vector<Value*> tensorIndices;
+      // NOLINTNEXTLINE(cppcoreguidelines-init-variables)
       Value* sliced;
       std::tie(sliced, tensorIndices) = emitIntAndSliceIndexing(
           lhs.range(), sliceable, lhs.subscript_exprs());
@@ -2336,6 +2349,7 @@ struct to_ir {
     // If it's a tensor, copy the RHS data into it
     if (sliceable->type()->isSubtypeOf(TensorType::get())) {
       std::vector<Value*> tensorIndices;
+      // NOLINTNEXTLINE(cppcoreguidelines-init-variables)
       Value* sliced;
       // Handle multi-dimensional slicing: first emit int/slice indexing
       // TODO: the Python equivalent code has special-cased copy_to
@@ -3328,6 +3342,7 @@ struct to_ir {
       at::ArrayRef<NamedValue> args,
       at::ArrayRef<NamedValue> kwargs) {
     auto g = method.graph();
+    // NOLINTNEXTLINE(cppcoreguidelines-init-variables)
     Node* fork_node;
     TypePtr out_type;
 
@@ -3744,7 +3759,7 @@ struct to_ir {
       Value* end,
       Value* step) {
     std::vector<NamedValue> args;
-    args.reserve(4);
+    args.reserve(5);
     args.emplace_back(loc, "self", sliceable);
 
     // XXX: If list slicing becomes more complicated or stops using
@@ -3756,11 +3771,10 @@ struct to_ir {
     } else {
       AT_ASSERT(!sliceable->type()->isSubtypeOf(TensorType::get()));
     }
-    // TODO for now let's deal with TupleType first. Ideally all list, tensor,
-    // string, and tuple slicing should be same (tugsbayasgalan)
+
     if (sliceable->type()->cast<TupleType>()) {
       std::vector<at::optional<NamedValue>> tuple_args;
-      // since we are only dealing with tuple slicing for now, we try to keep
+      // since we are only dealing with tuple slicing, we try to keep
       // tuple args seperate for now
       tuple_args.reserve(3);
 
@@ -3774,22 +3788,15 @@ struct to_ir {
       return emitTupleSlice(loc, args[0], tuple_args);
     }
 
-    // TODO this needs to be cleaned for list slicing
-    // Default value for start is 0.
-    if (!start) {
-      start = graph->insertConstant(0, loc);
-    }
-    args.emplace_back(loc, "start", start);
-
-    if (end) {
-      args.emplace_back(loc, "end", end);
-    }
-
+    // handling cases like x[0:2]. x[0:2:] is already handled from python
     if (!step) {
       step = graph->insertConstant(1, loc);
     }
-    NamedValue step_nv = NamedValue(loc, "step", step);
-    return emitBuiltinCall(loc, *graph, aten::slice, args, {step_nv});
+
+    args.emplace_back(loc, "start", start);
+    args.emplace_back(loc, "end", end);
+    args.emplace_back(loc, "step", step);
+    return emitBuiltinCall(loc, *graph, aten::slice, args, {});
   }
 
   // Desugars slice indexing: tensor[begin:end] -> tensor.slice(dim, begin, end,
@@ -3971,7 +3978,7 @@ struct to_ir {
       rdim =
           handle_indexing(subscript_expr, rev_idx, rdim, /*is_reverse=*/true);
     }
-    for (size_t i = 0; i < exprs.size(); i++) {
+    for (const auto i : c10::irange(exprs.size())) {
       if (!exprs[i].has_value()) {
         if (subscript_exprs[i].kind() == TK_SLICE_EXPR) {
           sliceable = emitSlice(
@@ -4202,20 +4209,29 @@ struct to_ir {
         const SliceExpr& slice = SliceExpr(subscript_exprs[0]);
         std::vector<at::optional<NamedValue>> tuple_args;
         tuple_args.reserve(3);
-        auto begin =
-            NamedValue(val_range, "begin", emitExpr(Expr(slice.startOr(0))));
-        tuple_args.emplace_back(begin);
+        if (slice.start().present()) {
+          auto begin = NamedValue(
+              val_range, "begin", emitExpr(Expr(slice.start().get())));
+          tuple_args.emplace_back(begin);
+        } else {
+          tuple_args.emplace_back(c10::nullopt);
+        }
+
         if (slice.end().present()) {
           auto end =
               NamedValue(val_range, "end", emitExpr(Expr(slice.end().get())));
           tuple_args.emplace_back(end);
-
         } else {
           tuple_args.emplace_back(c10::nullopt);
         }
-        // pushing step_size to match the tuple_args
-        tuple_args.emplace_back(c10::nullopt);
 
+        if (slice.step().present()) {
+          auto step =
+              NamedValue(val_range, "step", emitExpr(Expr(slice.step().get())));
+          tuple_args.emplace_back(step);
+        } else {
+          tuple_args.emplace_back(c10::nullopt);
+        }
         auto tupleSliceValue =
             emitTupleSlice(val_range, s_tuple_val, tuple_args);
         return std::make_shared<SimpleValue>(tupleSliceValue);
@@ -4428,7 +4444,7 @@ std::vector<Function*> CompilationUnit::define(
     this->register_function(std::move(fn));
   };
 
-  for (size_t i = 0; i < properties.size(); i++) {
+  for (const auto i : c10::irange(properties.size())) {
     PropertyPair property_fns = define_property(
         prefix,
         properties[i],
@@ -4447,7 +4463,7 @@ std::vector<Function*> CompilationUnit::define(
     }
   }
 
-  for (size_t i = 0; i < definitions.size(); i++) {
+  for (const auto i : c10::irange(definitions.size())) {
     auto fn = define(
         prefix,
         definitions[i],
@@ -4526,7 +4542,7 @@ void CompilationUnit::define_hooks(
   };
 
   // define hooks
-  for (size_t i = 0; i < hookDefs.size(); i++) {
+  for (const auto i : c10::irange(hookDefs.size())) {
     // check to see if already defined this hook
     auto existing_fn = check_collisions(hookDefs[i]);
     if (existing_fn != nullptr) {
@@ -4553,7 +4569,7 @@ void CompilationUnit::define_hooks(
   }
 
   // define pre_hooks
-  for (size_t i = 0; i < preHookDefs.size(); i++) {
+  for (const auto i : c10::irange(preHookDefs.size())) {
     // check to see if already defined this hook
     auto existing_fn = check_collisions(preHookDefs[i]);
     if (existing_fn != nullptr) {

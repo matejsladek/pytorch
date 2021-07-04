@@ -7736,13 +7736,16 @@ CUDA_IDENTIFIER_MAP = collections.OrderedDict(
         ("cub::CountingInputIterator", ("hipcub::CountingInputIterator", CONV_SPECIAL_FUNC, API_RUNTIME)),
         ("cub::DeviceRadixSort", ("hipcub::DeviceRadixSort", CONV_SPECIAL_FUNC, API_RUNTIME)),
         ("cub::DeviceReduce", ("hipcub::DeviceReduce", CONV_SPECIAL_FUNC, API_RUNTIME)),
+        ("cub::DeviceRunLengthEncode", ("hipcub::DeviceRunLengthEncode", CONV_SPECIAL_FUNC, API_RUNTIME)),
         ("cub::DeviceScan", ("hipcub::DeviceScan", CONV_SPECIAL_FUNC, API_RUNTIME)),
         ("cub::DeviceSegmentedRadixSort", ("hipcub::DeviceSegmentedRadixSort", CONV_SPECIAL_FUNC, API_RUNTIME)),
+        ("cub::DeviceSegmentedReduce", ("hipcub::DeviceSegmentedReduce", CONV_SPECIAL_FUNC, API_RUNTIME)),
         ("cub::DeviceSelect", ("hipcub::DeviceSelect", CONV_SPECIAL_FUNC, API_RUNTIME)),
         ("cub::KeyValuePair", ("hipcub::KeyValuePair", CONV_SPECIAL_FUNC, API_RUNTIME)),
         ("cub::Max", ("hipcub::Max", CONV_SPECIAL_FUNC, API_RUNTIME)),
         ("cub::Min", ("hipcub::Min", CONV_SPECIAL_FUNC, API_RUNTIME)),
         ("cub::Sum", ("hipcub::Sum", CONV_SPECIAL_FUNC, API_RUNTIME)),
+        ("cub::ArgIndexInputIterator", ("hipcub::ArgIndexInputIterator", CONV_SPECIAL_FUNC, API_RUNTIME)),
         ("cub::TransformInputIterator", ("hipcub::TransformInputIterator", CONV_SPECIAL_FUNC, API_RUNTIME)),
         ("cub::WarpReduce", ("hipcub::WarpReduce", CONV_SPECIAL_FUNC, API_RUNTIME)),
         ("nvtxMark", ("roctxMark", CONV_OTHER, API_ROCTX)),
@@ -7775,6 +7778,8 @@ CUDA_SPARSE_MAP = collections.OrderedDict(
         ("cusparseMatDescr_t", ("hipsparseMatDescr_t", CONV_MATH_FUNC, API_SPARSE)),
         ("cusparseScsrmm2", ("hipsparseScsrmm2", CONV_MATH_FUNC, API_SPARSE)),
         ("cusparseDcsrmm2", ("hipsparseDcsrmm2", CONV_MATH_FUNC, API_SPARSE)),
+        ("cusparseCcsrmm2", ("hipsparseCcsrmm2", CONV_MATH_FUNC, API_SPARSE)),
+        ("cusparseZcsrmm2", ("hipsparseZcsrmm2", CONV_MATH_FUNC, API_SPARSE)),
         ("cusparseScsrmm", ("hipsparseScsrmm", CONV_MATH_FUNC, API_SPARSE)),
         ("cusparseDcsrmm", ("hipsparseDcsrmm", CONV_MATH_FUNC, API_SPARSE)),
         (
@@ -7913,6 +7918,14 @@ PYTORCH_SPECIFIC_MAPPINGS = collections.OrderedDict(
             "OptionalCUDAStreamGuard",
             ("OptionalHIPStreamGuardMasqueradingAsCUDA", API_PYTORCH),
         ),
+        (
+            "cuda::CUDAMultiStreamGuard",
+            ("hip::HIPMultiStreamGuardMasqueradingAsCUDA", API_PYTORCH),
+        ),
+        (
+            "CUDAMultiStreamGuard",
+            ("HIPMultiStreamGuardMasqueradingAsCUDA", API_PYTORCH),
+        ),
         # Only get needs to be transformed this way; all the other ones can go
         # straight to the normal versions hip::HIPCachingAllocator
         (
@@ -7944,6 +7957,15 @@ PYTORCH_SPECIFIC_MAPPINGS = collections.OrderedDict(
             ("hip::getStreamFromPoolMasqueradingAsCUDA", API_PYTORCH),
         ),
         ("getStreamFromPool", ("getStreamFromPoolMasqueradingAsCUDA", API_PYTORCH)),
+        (
+            "cuda::getDefaultCUDAStream",
+            ("hip::getDefaultHIPStreamMasqueradingAsCUDA", API_PYTORCH),
+        ),
+        (
+            "cuda::getStreamFromExternal",
+            ("hip::getStreamFromExternalMasqueradingAsCUDA", API_PYTORCH),
+        ),
+        ("getStreamFromExternal", ("getStreamFromExternalMasqueradingAsCUDA", API_PYTORCH)),
         (
             "cuda::getDefaultCUDAStream",
             ("hip::getDefaultHIPStreamMasqueradingAsCUDA", API_PYTORCH),
@@ -8040,6 +8062,7 @@ CAFFE2_SPECIFIC_MAPPINGS = collections.OrderedDict(
         ("/THCCachingAllocator_gpu", ("/hip/THCCachingAllocator_gpu", API_CAFFE2)),
         ("/top_k_heap_selection", ("/hip/top_k_heap_selection", API_CAFFE2)),
         ("/top_k_radix_selection", ("/hip/top_k_radix_selection", API_CAFFE2)),
+        ("/GpuAtomics", ("/hip/GpuAtomics", API_CAFFE2)),
         ("/GpuDefs", ("/hip/GpuDefs", API_CAFFE2)),
         ("/GpuScanUtils", ("/hip/GpuScanUtils", API_CAFFE2)),
         ("/GpuBitonicSort", ("/hip/GpuBitonicSort", API_CAFFE2)),
@@ -8126,6 +8149,7 @@ C10_MAPPINGS = collections.OrderedDict(
         ("getDefaultCUDAStream", ("getDefaultHIPStream", API_C10)),
         ("cuda::getCurrentCUDAStream", ("hip::getCurrentHIPStream", API_C10)),
         ("getCurrentCUDAStream", ("getCurrentHIPStream", API_C10)),
+        ("cuda::get_cuda_check_prefix", ("hip::get_cuda_check_prefix", API_C10)),
         ("cuda::setCurrentCUDAStream", ("hip::setCurrentHIPStream", API_C10)),
         ("setCurrentCUDAStream", ("setCurrentHIPStream", API_C10)),
         ("cuda::CUDACachingAllocator", ("hip::HIPCachingAllocator", API_C10)),
